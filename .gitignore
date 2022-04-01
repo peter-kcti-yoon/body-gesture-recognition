@@ -1,0 +1,4 @@
+
+*.pyc
+examples/outputImage.jpg
+examples/*
