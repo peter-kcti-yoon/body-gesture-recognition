@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
 	# Start body tracker
 	bodyTracker = pykinect.start_body_tracker()
-	cap = cv2.VideoCapture(0)
+	# cap = cv2.VideoCapture(0)
 	
 	cv2.namedWindow('Color image with skeleton',cv2.WINDOW_NORMAL)
 
