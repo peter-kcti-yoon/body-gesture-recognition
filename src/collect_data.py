@@ -13,13 +13,12 @@ mp_drawing = mp.solutions.drawing_utils # Drawing utilities
 # Path for exported data, numpy arrays
 DATA_PATH = os.path.join('../data') 
 
-# Actions that we try to detect
-actions = np.array(['hello', 'thanks', 'iloveyou'])
-sequence_lengths = [40, 60, 70]
-# Thirty videos worth of data
-no_sequences = 2
+############################################
+actions = np.array(['hello', 'thanks', 'iloveyou']) # action class
+sequence_lengths = [40, 60, 70] # duration of each action
+no_sequences = 2 # number of samples
+############################################
 
-# Videos are going to be 30 frames in length
 
 
 
@@ -98,9 +97,7 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
         for sequence in range(no_sequences):
 
             wait_count = 0
-            wait_delay = 50
-            vis_delay =22
-            
+            wait_delay = 50            
             kp_list = []
             while 1:
                 start_ckpt = time.time()            
@@ -111,12 +108,12 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
 
                 cv2.putText(image, 'Collecting frames for {} Video Number {}'.format(action, sequence), (15,30), 
                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3, cv2.LINE_AA)
-                if wait_count < 30 :
+                if wait_count < wait_delay :
                     cv2.putText(image, f'STARTING COLLECTION in {wait_delay-wait_count}', (120,200), 
                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255, 0), 4, cv2.LINE_AA)
 
                     wait_count += 1
-                    if cv2.waitKey(vis_delay) ==ord('q'):
+                    if cv2.waitKey(1) ==ord('q'):
                         quit()
                     cv2.imshow('OpenCV Feed', image)
 
@@ -124,7 +121,7 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
                     keypoints = extract_keypoints(results)
                     kp_list.append(keypoints)
                     image = prob_viz(len(kp_list), seq_len,image)
-                    if cv2.waitKey(vis_delay) ==ord('q'):
+                    if cv2.waitKey(1) ==ord('q'):
                         quit()
                     cv2.imshow('OpenCV Feed', image)
 
