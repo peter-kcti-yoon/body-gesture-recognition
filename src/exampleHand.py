@@ -1,5 +1,6 @@
 import cv2
 import mediapipe as mp
+import time
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_hands = mp.solutions.hands
@@ -12,6 +13,7 @@ cap.open(0)
 assert cap.isOpened(), 'Camera is not accessable.'
 with mp_hands.Hands(
     model_complexity=0,
+    max_num_hands=4,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5) as hands:
   while cap.isOpened():
@@ -25,8 +27,9 @@ with mp_hands.Hands(
     # pass by reference.
     image.flags.writeable = False
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    start_ckpt = time.time()
     results = hands.process(image)
-
+    print('took ', time.time()-start_ckpt, end='\r')
     # Draw the hand annotations on the image.
     image.flags.writeable = True
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)

@@ -10,17 +10,27 @@ mp_hands = mp.solutions.hands
 sys.path.insert(1, '../')
 import pykinect_azure as pykinect
 
+
+
+def get_ckpt(prev=0 ):
+	if prev:
+		return time.time()
+	else:
+		tmp =time.time()
+		return tmp, tmp-prev
+
+
 if __name__ == "__main__":
 
 	# Initialize the library, if the library is not found, add the library path as argument
 	pykinect.initialize_libraries(track_body=True)
-	hands = mp_hands.Hands(static_image_mode=True,max_num_hands=2,min_detection_confidence=0.5)
+	hands = mp_hands.Hands(static_image_mode=True, max_num_hands=2, min_detection_confidence=0.5)
 
 	# Modify camera configuration
 	device_config = pykinect.default_configuration
-	device_config.color_resolution = pykinect.K4A_COLOR_RESOLUTION_1080P
-	# device_config.color_resolution = pykinect.K4A_COLOR_RESOLUTION_OFF
-	# device_config.color_resolution = pykinect.K4A_COLOR_RESOLUTION_720P
+	# device_config.color_resolution = pykinect.K4A_COLOR_RESOLUTION_1080P
+	# device_config.color_resolution = pykinect.K4A_COLOR_RESOLUTION_OFF # for depth image
+	device_config.color_resolution = pykinect.K4A_COLOR_RESOLUTION_720P
 	device_config.depth_mode = pykinect.K4A_DEPTH_MODE_WFOV_2X2BINNED
 	#print(device_config)
 
@@ -44,18 +54,13 @@ if __name__ == "__main__":
 
 		# Get body tracker frame
 		body_frame = bodyTracker.update()
-		# pdb.set_trace()
-		# print(body_frame)
-		# quit()
-		# if not binary: # is 1
-		# 	binary = 0
-		# 	continue
-		# else:
-		# 	binary = 1
 		track_update_ckpt = time.time()
+
 		# Get the color image
+		# ret, image = capture.get_colored_depth_image()
 		ret, image = capture.get_color_image()
 		get_color_ckpt = time.time()
+		
 		if not ret:
 			continue
 		
@@ -79,7 +84,7 @@ if __name__ == "__main__":
 
 		color_image = image
  		# Draw the skeletons into the color image
-		# color_skeleton = body_frame.draw_bodies(color_image, pykinect.K4A_CALIBRATION_TYPE_COLOR)
+		color_skeleton = body_frame.draw_bodies(color_image, pykinect.K4A_CALIBRATION_TYPE_COLOR)
 		# print(color_image.shape)
 		# Overlay body segmentation on depth image
 		
@@ -87,7 +92,7 @@ if __name__ == "__main__":
 		# print(os.path.getsize(file_name)/1024+'KB / '+size+' KB downloaded!', end='\r')
 
 
-		print(f'Dev: {(dev_update_ckpt-start_ckpt):.2f}s,  Track: {(track_update_ckpt-dev_update_ckpt):.2f}s, Image: { (get_color_ckpt-track_update_ckpt):.2f}s, Prepare: {(prepare_color_ckpt-get_color_ckpt):.2f}s, Hand: {(hand_ckpt- prepare_color_ckpt):.2f}s', end='\r')
+		print(f'Dev: {(dev_update_ckpt-start_ckpt):.3f}s,  Track: {(track_update_ckpt-dev_update_ckpt):.3f}s, Image: { (get_color_ckpt-track_update_ckpt):.3f}s, Prepare: {(prepare_color_ckpt-get_color_ckpt):.3f}s, Hand: {(hand_ckpt- prepare_color_ckpt):.3f}s', end='\r')
 		
 
 		cv2.imshow('Color image with skeleton',image)	

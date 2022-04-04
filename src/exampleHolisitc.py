@@ -78,14 +78,6 @@ def init_data_dirs():
                 print('makedirs exception')
             pass
 
-colors = [(245,117,16), (117,245,16), (16,117,245)]
-def prob_viz(res, seq_len, input_frame):
-    
-    a = (120,200)
-    b = (120+ int(400/seq_len*(seq_len-res)),250)
-    cv2.rectangle(input_frame, a, b , (117,245,16), -1)
-    cv2.putText(input_frame, 'Performing', (a[0],b[1]-15), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
-    return input_frame
 
 init_data_dirs()
 
@@ -93,48 +85,22 @@ init_data_dirs()
 cap = cv2.VideoCapture(0)
 with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
     
-    for action, seq_len in zip(actions,sequence_lengths):
-        # Loop through sequences aka videos
-        for sequence in range(no_sequences):
 
-            wait_count = 0
-            wait_delay = 50
-            vis_delay =22
-            
-            kp_list = []
-            while 1:
-                start_ckpt = time.time()            
-                ret, frame = cap.read()
-                image, results = mediapipe_detection(frame, holistic)
-                draw_landmarks(image, results)
-                print(f'Took: {(time.time() - start_ckpt):.2f}s', end='\r')
-
-                cv2.putText(image, 'Collecting frames for {} Video Number {}'.format(action, sequence), (15,30), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3, cv2.LINE_AA)
-                if wait_count < 30 :
-                    cv2.putText(image, f'STARTING COLLECTION in {wait_delay-wait_count}', (120,200), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255, 0), 4, cv2.LINE_AA)
-
-                    wait_count += 1
-                    if cv2.waitKey(vis_delay) ==ord('q'):
-                        quit()
-                    cv2.imshow('OpenCV Feed', image)
-
-                else:
-                    keypoints = extract_keypoints(results)
-                    kp_list.append(keypoints)
-                    image = prob_viz(len(kp_list), seq_len,image)
-                    if cv2.waitKey(vis_delay) ==ord('q'):
-                        quit()
-                    cv2.imshow('OpenCV Feed', image)
-
-                    if seq_len < len(kp_list):
-                        npy_path = os.path.join(DATA_PATH,action, f'{action}_{str(sequence).zfill(3)}')
-                        np.save(npy_path, np.vstack(keypoints))
-                        break
-
-
-                    
+    while 1:
+        start_ckpt = time.time()            
+        ret, frame = cap.read()
+        image, results = mediapipe_detection(frame, holistic)
+        print(f'Took: {(time.time() - start_ckpt):.4f}s', end='\r')
+        draw_landmarks(image, results)
+        # if results.left_hand_landmarks:
+        #     for res in results.left_hand_landmarks.landmark:
+        #         print([res.z*100] )
+        
+        
+        if cv2.waitKey(1) ==ord('q'):
+            quit()
+        cv2.imshow('OpenCV Feed', image)
+    
     cap.release()
     cv2.destroyAllWindows()
   
