@@ -127,7 +127,7 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
 
                     if seq_len < len(kp_list):
                         npy_path = os.path.join(DATA_PATH,action, f'{action}_{str(sequence).zfill(3)}')
-                        np.save(npy_path, np.vstack(keypoints))
+                        np.save(npy_path, np.vstack(kp_list))
                         break
 
 
