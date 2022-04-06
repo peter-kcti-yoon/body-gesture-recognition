@@ -1,26 +1,23 @@
-from multiprocessing.connection import wait
 import cv2
 import numpy as np
 import os
-from matplotlib import pyplot as plt
 import time
 import mediapipe as mp
-
-
+from opt import actions
+from model import Gesturer
+from train import right_hand_only
 mp_holistic = mp.solutions.holistic # Holistic model
 mp_drawing = mp.solutions.drawing_utils # Drawing utilities
 
-# Path for exported data, numpy arrays
-DATA_PATH = os.path.join('../data') 
-
-# Actions that we try to detect
-actions = np.array(['hello', 'thanks', 'iloveyou'])
-sequence_lengths = [40, 60, 70]
-# Thirty videos worth of data
-no_sequences = 2
-
-# Videos are going to be 30 frames in length
-
+colors = [(245,117,16), (117,245,16), (16,117,245),(16,117,245),(16,117,245)]
+def prob_viz(res, actions, input_frame, colors):
+    output_frame = input_frame.copy()
+    for num, prob in enumerate(res):
+        cv2.rectangle(output_frame, (0,60+num*40), (int(prob*100), 90+num*40), colors[num], -1)
+        # print((0,60+num*40), (int(prob*100), 90+num*40))
+        cv2.putText(output_frame, actions[num], (0, 85+num*40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,0), 2, cv2.LINE_AA)
+        
+    return output_frame
 
 
 def mediapipe_detection(image, model):
@@ -67,31 +64,42 @@ def extract_keypoints(results):
 
     return np.concatenate([pose, face, lh, rh])
 
-def init_data_dirs():
-    DATA_ROOT = '../data'
-    for action in actions:
-        if not os.path.exists(os.path.join(DATA_ROOT,action)):
-            try: 
-                print(os.path.join(DATA_ROOT,action))
-                os.makedirs(os.path.join(DATA_ROOT,action))
-            except:
-                print('makedirs exception')
-            pass
-
-
-init_data_dirs()
-
 
 cap = cv2.VideoCapture(0)
-with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
-    
+
+model = Gesturer().build()
+model.load_weights('../weights/action.h5')
+seq = []
+with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:   
 
     while 1:
         start_ckpt = time.time()            
         ret, frame = cap.read()
         image, results = mediapipe_detection(frame, holistic)
-        print(f'Took: {(time.time() - start_ckpt):.4f}s', end='\r')
+
+        res = extract_keypoints(results)
+        seq.append(res)
+        seq = seq[-30:]
+
+        if len(seq) == 30:
+            # print(np.array(seq).shape)
+            # rh_only = right_hand_only(np.array(seq))
+            # res = model.predict(np.expand_dims(rh_only,axis=0))[0]
+            res = model.predict(np.expand_dims(seq,axis=0))[0]
+            # print(actions[np.argmax(res)])
+            # predictions.append(np.argmax(res))
+
+            image = prob_viz(res, actions, image, colors)
+            
+
+            ss = []
+            ss = [ f'{pr:.3f}' for pr in res]
+            cv2.putText(image,' '.join(ss) , (400,400), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,0), 2, cv2.LINE_AA)
+
+        # print(f'Took: {(time.time() - start_ckpt):.4f}s', end='\r')
         draw_landmarks(image, results)
+        
+
         # if results.left_hand_landmarks:
         #     for res in results.left_hand_landmarks.landmark:
         #         print([res.z*100] )
