@@ -3,3 +3,5 @@
 examples/outputImage.jpg
 examples/*
 data/*
+weights
+src/Logs
