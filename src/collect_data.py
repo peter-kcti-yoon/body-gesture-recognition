@@ -5,19 +5,20 @@ import os
 from matplotlib import pyplot as plt
 import time
 import mediapipe as mp
-
+from opt import actions as _actions
 
 mp_holistic = mp.solutions.holistic # Holistic model
 mp_drawing = mp.solutions.drawing_utils # Drawing utilities
 
 # Path for exported data, numpy arrays
-DATA_PATH = os.path.join('../data') 
+DATA_ROOT = os.path.join('../data/tmp') 
 
 ############################################
-actions = np.array(['hello', 'thanks', 'iloveyou']) # action class
-sequence_lengths = [40, 60, 70] # duration of each action
-no_sequences = 2 # number of samples
+actions = np.array(_actions) # action class
+#sequence_lengths = [] # duration of each action
+no_sequences = 10 # number of samples
 ############################################
+seq_len = 30
 
 
 
@@ -67,7 +68,6 @@ def extract_keypoints(results):
     return np.concatenate([pose, face, lh, rh])
 
 def init_data_dirs():
-    DATA_ROOT = '../data'
     for action in actions:
         if not os.path.exists(os.path.join(DATA_ROOT,action)):
             try: 
@@ -92,7 +92,7 @@ init_data_dirs()
 cap = cv2.VideoCapture(0)
 with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
     
-    for action, seq_len in zip(actions,sequence_lengths):
+    for action  in actions:
         # Loop through sequences aka videos
         for sequence in range(no_sequences):
 
@@ -126,7 +126,7 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
                     cv2.imshow('OpenCV Feed', image)
 
                     if seq_len < len(kp_list):
-                        npy_path = os.path.join(DATA_PATH,action, f'{action}_{str(sequence).zfill(3)}')
+                        npy_path = os.path.join(DATA_ROOT ,action, f'{action}_{str(sequence).zfill(3)}')
                         np.save(npy_path, np.vstack(kp_list))
                         break
 
