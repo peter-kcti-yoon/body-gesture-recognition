@@ -17,12 +17,6 @@ visibility: A value in [0.0, 1.0] indicating the likelihood of the landmark bein
 
 """
 
-def get_n_feature(m, c):
-    if m=='rh':
-        return 21*c
-    else: # body
-        return 21*c + 33*c
-
 
 def normalize(args, tmp):
     """
@@ -55,7 +49,7 @@ def train():
     for action in actions:
         for f in os.listdir(os.path.join(DATA_ROOT_PATH,action)):
 
-            tmp = np.load(open(os.path.join(DATA_ROOT_PATH,action,f),'rb')) # 30,T,F
+            tmp = np.load(open(os.path.join(DATA_ROOT_PATH,action,f),'rb')) # (30,F)
             tmp = normalize(args, tmp)
             _X.append(tmp)
             _y.append(label_map[action])

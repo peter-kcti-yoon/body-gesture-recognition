@@ -2,7 +2,11 @@ import numpy as np
 
 
 
-
+def get_n_feature(m, c):
+    if m=='rh':
+        return 21*c
+    else: # body
+        return 21*c + 33*c
 
 def split_keypoints(_raw):
     """

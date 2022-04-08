@@ -3,13 +3,17 @@ import numpy as np
 import os
 import time
 import mediapipe as mp
-from opt import actions
+from opt import arg_parser,actions_dict
 from model import Gesturer
-from train import right_hand_only
+from uilts import *
+
 mp_holistic = mp.solutions.holistic # Holistic model
 mp_drawing = mp.solutions.drawing_utils # Drawing utilities
 
 colors = [(245,117,16), (117,245,16), (16,117,245),(16,117,245),(16,117,245)]
+args = arg_parser()
+actions = actions_dict[args.actions]
+
 def prob_viz(res, actions, input_frame, colors):
     output_frame = input_frame.copy()
     for num, prob in enumerate(res):
@@ -67,7 +71,9 @@ def extract_keypoints(results):
 
 cap = cv2.VideoCapture(0)
 
-model = Gesturer().build()
+gesture = Gesturer(len(actions), get_n_feature(args.mode, args.channels))
+
+model = gesture.build()
 model.load_weights('../weights/action.h5')
 seq = []
 with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:   
@@ -78,17 +84,18 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
         image, results = mediapipe_detection(frame, holistic)
 
         res = extract_keypoints(results)
-        seq.append(res)
+        pose, lh, rh = split_keypoints(res)
+        if args.mode =='rh':
+            dd = normalize_xyz(rh, args.channels)
+        else: #body
+            dd = normalize_skeleton(pose,rh, args.channels)
+
+        seq.append(dd)
         seq = seq[-30:]
 
         if len(seq) == 30:
-            # print(np.array(seq).shape)
-            # rh_only = right_hand_only(np.array(seq))
-            # res = model.predict(np.expand_dims(rh_only,axis=0))[0]
             res = model.predict(np.expand_dims(seq,axis=0))[0]
-            # print(actions[np.argmax(res)])
-            # predictions.append(np.argmax(res))
-
+            
             image = prob_viz(res, actions, image, colors)
             
 
