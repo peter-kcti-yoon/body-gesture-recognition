@@ -25,10 +25,14 @@ def get_n_feature(m, c):
 
 
 def normalize(args, tmp):
+    """
+    tmp: np, 30,T,F
+    """
+
     res = []
     for t in tmp:
-        pose, lh, rh = split_keypoints(t)
-        
+        pose, lh, rh = split_keypoints(t) # 126?
+
         if args.mode == 'rh':
             dd = normalize_xyz(rh, args.channels)
         else: # body
@@ -51,7 +55,7 @@ def train():
     for action in actions:
         for f in os.listdir(os.path.join(DATA_ROOT_PATH,action)):
 
-            tmp = np.load(open(os.path.join(DATA_ROOT_PATH,action,f),'rb'))
+            tmp = np.load(open(os.path.join(DATA_ROOT_PATH,action,f),'rb')) # 30,T,F
             tmp = normalize(args, tmp)
             _X.append(tmp)
             _y.append(label_map[action])
