@@ -42,7 +42,7 @@ def scaling(pose, rh, lh=None):
 
 
 def load_dataset(ver, actions):
-    data_root = f'../data/data{ver}'
+    data_root = f'./data/data{ver}'
 
     X, y= [],[]
     for a in actions:
@@ -59,7 +59,7 @@ def load_dataset(ver, actions):
 
 
 def load_testset(ver):
-    data_root = f'../data/data{ver}'
+    data_root = f'./data/data{ver}'
 
     X = np.load(open(os.path.join(data_root,'testset1.npy'),'rb'))
     y = np.load(open(os.path.join(data_root,'labels.npy'),'rb'))
