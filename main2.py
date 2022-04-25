@@ -40,10 +40,10 @@ def set_seed(seed):
 
 class TensorData(Dataset):
 
-    def __init__(self, args):
+    def __init__(self, args, is_train=True):
         actions = actions_dict[args.actions]
         self.args = args
-        if args.phase == 'train':
+        if is_train:
             self.x_data, self.y_data = self.train_data(actions)
         else:
             self.x_data, self.y_data = self.test_data(actions)
@@ -81,8 +81,6 @@ class TensorData(Dataset):
 
         data = np.concatenate([body, rh ])
         return data
-
-
 
 
     def __getitem__(self, index):
@@ -132,89 +130,20 @@ class Regressor(nn.Module):
 
 
 
-def train(configs, args):
-    criterion = nn.CrossEntropyLoss()
-    
-    trainsets = TensorData(args.part)
-    model = Regressor(configs[N_CLASSES], trainsets.n_feature)
-    trainloader = torch.utils.data.DataLoader(trainsets, batch_size=32, shuffle=True)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.00001, weight_decay=1e-8)
-    # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-
-    loss_ = [] # loss를 저장할 리스트.
-    n = len(trainloader)
-    name_desc = tqdm(range(args.epoch))
-    for epoch in name_desc:
-        running_loss = 0.0 # 한 에폭이 돌 때 그안에서 배치마다 loss가 나온다. 즉 한번 학습할 때 그렇게 쪼개지면서 loss가 다 나오니 MSE를 구하기 위해서 사용한다.
-        for i, data in enumerate(trainloader, 0): # 무작위로 섞인 32개의 데이터가 담긴 배치가 하나씩 들어온다.
-            
-            inputs, values = data # data에는 X, Y가 들어있다.
-            optimizer.zero_grad() # 최적화 초기화.
-
-            outputs = model(inputs) # 모델에 입력값을 넣어 예측값을 산출한다.
-            loss = criterion(outputs, values) # 손실함수를 계산. error 계산.
-            loss.backward() # 손실 함수를 기준으로 역전파를 설정한다.
-            optimizer.step() # 역전파를 진행하고 가중치를 업데이트한다.
-
-            running_loss += loss.item() # epoch 마다 평균 loss를 계산하기 위해 배치 loss를 더한다.
-        
-        loss_.append(running_loss/n) # MSE(Mean Squared Error) 계산
-    
-    torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': loss,
-            }, 'checkpoint.pt')
-    
-
-    evaluation(configs, args)
-    plt.plot(loss_)
-    plt.title('Loss')
-    plt.xlabel('epoch')
-    plt.show()
-
-def evaluation(configs, args):
-    
-    testset = TensorData(configs[ACTIONS],configs[N_CLASSES], args.part, is_train=False)
-    dataloader = torch.utils.data.DataLoader(testset, batch_size=32, shuffle=False)
-    
-    model = Regressor(configs[N_CLASSES],testset.n_feature)
-    checkpoint = torch.load('checkpoint.pt')
-    model.load_state_dict(checkpoint['model_state_dict'])
-
-    predictions = torch.tensor([], dtype=torch.float) # 예측값을 저장하는 텐서.
-    actual = torch.tensor([], dtype=torch.float) # 실제값을 저장하는 텐서.
-
-    with torch.no_grad():
-        model.eval() # 평가를 할 땐 반드시 eval()을 사용해야 한다.
-
-    for data in dataloader:
-        inputs, values = data
-        outputs = model(inputs)
-
-        predictions = torch.cat((predictions, outputs), 0) # cat함수를 통해 예측값을 누적.
-        actual = torch.cat((actual, values), 0) # cat함수를 통해 실제값을 누적.
-
-    predictions = predictions.detach().numpy() # 넘파이 배열로 변경.
-    actual = actual.detach().numpy() # 넘파이 배열로 변경.
-    print_results(predictions, actual, configs[ACTIONS])
-
-
-
-def print_results(pred, label, actions):
+def print_results(pred, label, args):
     t1 = np.argmax(pred, axis=1)
     t2 = label
     acc = np.mean((t1==t2).astype(int))
     print(f'mAP: {acc*100:.2f}%')
+    actions_list = actions_dict[args.actions]
 
-    for i, a in enumerate(actions):
+    for i, a in enumerate(actions_list):
         indices = np.where(t2 ==i)
         pred_mask = t1[indices]
         label_mask = t2[indices]
         acc = np.mean((pred_mask==label_mask).astype(int))
-        print(f'\t {a:_>10}: {acc:.2f}%, #Samples: {pred_mask.shape}')
+        print(f'   {a:_>10} (#{pred_mask.shape[0]}): {acc:.2f}%')
 
 def import_class(name):
     components = name.split('.')
@@ -254,12 +183,44 @@ class Processor:
     def __init__(self, args):
         self.args = args
         self.load_model()
-
+        self.load_data()
         if args.phase =='train':
             self.train()
 
+        self.eval()
+
+    def load_data(self):
+        trainsets = TensorData(self.args,  is_train= True)
+        self.trainloader = torch.utils.data.DataLoader(trainsets, batch_size=32, shuffle=True)
+        
+        testset = TensorData(self.args, is_train=False)
+        self.testloader = torch.utils.data.DataLoader(testset, batch_size=32, shuffle=False)
+        
 
 
+    def eval(self):
+
+        checkpoint = torch.load('checkpoint.pt')
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+
+        predictions = torch.tensor([], dtype=torch.float) # 예측값을 저장하는 텐서.
+        actual = torch.tensor([], dtype=torch.float) # 실제값을 저장하는 텐서.
+
+        with torch.no_grad():
+            self.model.eval() # 평가를 할 땐 반드시 eval()을 사용해야 한다.
+
+        for data in self.testloader:
+            inputs, values = data
+            outputs = self.model(inputs)
+
+            predictions = torch.cat((predictions, outputs), 0) # cat함수를 통해 예측값을 누적.
+            actual = torch.cat((actual, values), 0) # cat함수를 통해 실제값을 누적.
+
+        predictions = predictions.detach().numpy() # 넘파이 배열로 변경.
+        actual = actual.detach().numpy() # 넘파이 배열로 변경.
+        print_results(predictions, actual, self.args)
+    
+    
     def load_model(self):
         Model = import_class(self.args.model)
         print(Model)
@@ -268,19 +229,15 @@ class Processor:
         self.loss = nn.CrossEntropyLoss()
 
     def train(self):
-        
-        trainsets = TensorData(self.args)
-        trainloader = torch.utils.data.DataLoader(trainsets, batch_size=32, shuffle=True)
-
         optimizer = optim.Adam(self.model.parameters(), lr=0.00001, weight_decay=1e-8)
         # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
         loss_ = [] # loss를 저장할 리스트.
-        n = len(trainloader)
+        n = len(self.trainloader)
         name_desc = tqdm(range(self.args.epoch))
         for epoch in name_desc:
             running_loss = 0.0 # 한 에폭이 돌 때 그안에서 배치마다 loss가 나온다. 즉 한번 학습할 때 그렇게 쪼개지면서 loss가 다 나오니 MSE를 구하기 위해서 사용한다.
-            for i, data in enumerate(trainloader, 0): # 무작위로 섞인 32개의 데이터가 담긴 배치가 하나씩 들어온다.
+            for i, data in enumerate(self.trainloader, 0): # 무작위로 섞인 32개의 데이터가 담긴 배치가 하나씩 들어온다.
                 
                 inputs, values = data # data에는 X, Y가 들어있다.
                 optimizer.zero_grad() # 최적화 초기화.
