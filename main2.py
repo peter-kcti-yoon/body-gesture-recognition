@@ -78,8 +78,12 @@ class TensorData(Dataset):
             body, rh = translate(body), translate(rh)
         if self.args.scale:
             body, rh  = scaling(body,rh)
+        
+        if self.args.type =='body':
+            data = np.concatenate([body, rh ])
+        else:
+            data = rh
 
-        data = np.concatenate([body, rh ])
         return data
 
 
@@ -88,7 +92,7 @@ class TensorData(Dataset):
         data = self.x_data[index]
         data = self.process_data(data)
 
-        # print(type(data), data.shape, data[0])
+        
         x = torch.from_numpy(data).float()
         y = torch.from_numpy(np.array(self.y_data[index])).long() 
         return x,y 
@@ -160,6 +164,8 @@ def get_parser():
     parser.add_argument('-a', '--all', action='store_true')
     parser.add_argument('-ep', '--epoch', type=int, default=200)
     parser.add_argument('-p', '--part', type=int, help='index for body part')
+    parser.add_argument('--train_batch_size', default=32, type=int, help='index for body part')
+    parser.add_argument('--test_batch_size', default=64, type=int, help='index for body part')
 
     ## Model
     parser.add_argument('--model', default=None)
@@ -170,10 +176,10 @@ def get_parser():
     ## data
     parser.add_argument('--translate', type=bool, default=True)
     parser.add_argument('--scale', type=bool, default=True)
+    parser.add_argument('--type', type=str, default='body')
 
     ## Base
     parser.add_argument('--config', type=str, default='./configs/train_small_body.yaml')
-    parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--phase', default='train', help='must be train or test')
     parser.add_argument('--actions', default=4, type=int , help='must be train or test')
     return parser
@@ -191,10 +197,10 @@ class Processor:
 
     def load_data(self):
         trainsets = TensorData(self.args,  is_train= True)
-        self.trainloader = torch.utils.data.DataLoader(trainsets, batch_size=32, shuffle=True)
+        self.trainloader = torch.utils.data.DataLoader(trainsets, batch_size=self.args.train_batch_size, shuffle=True)
         
         testset = TensorData(self.args, is_train=False)
-        self.testloader = torch.utils.data.DataLoader(testset, batch_size=32, shuffle=False)
+        self.testloader = torch.utils.data.DataLoader(testset, batch_size=self.args.test_batch_size, shuffle=False)
         
 
 
@@ -225,7 +231,7 @@ class Processor:
         Model = import_class(self.args.model)
         print(Model)
         self.model = Model(**self.args.model_args)
-        print(self.model)
+        # print(self.model)
         self.loss = nn.CrossEntropyLoss()
 
     def train(self):

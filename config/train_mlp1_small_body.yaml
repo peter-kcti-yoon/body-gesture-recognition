@@ -1,10 +1,10 @@
 # feeder
 
 
-actions: 4
+actions: 5
 
-mode: body
 phase: train
+type: body
 
 # data
 translate: True
@@ -12,12 +12,12 @@ scale: True
 
 # Training
 epoch: 200
-
-
+train_batch_size: 32
+test_batch_size: 128
 # model
-model: model.mlpa.Model
+model: model.mlp1.Model
 model_args:
-  num_class: 5
+  num_class: 4
   num_feature: 195
 
 
