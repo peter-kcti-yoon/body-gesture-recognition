@@ -1,0 +1,5 @@
+
+- target_train_set_label에 없으면 전부 background행.
+- dataset 촬영시 앞뒤로 3~4프레임은 drop시키자. 라벨링 애매하니까.
+
+

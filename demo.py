@@ -113,7 +113,8 @@ class Processor:
         cap.open(0)
         checkpoint = torch.load('checkpoint.pt')
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model.eval()
+        with torch.no_grad():
+            self.model.eval()
         softmax = Softmax()
         actions = actions_dict[self.args.actions]
 

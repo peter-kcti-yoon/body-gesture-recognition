@@ -5,3 +5,8 @@ examples/*
 data/*
 weights
 src/Logs
+check.ipynb
+data_old/*
+data/*
+weights/*
+olds/*
