@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Dataset
 import torch.nn.functional as F                    
 from tqdm import tqdm
 import yaml
+from sklearn.model_selection import train_test_split
 # Loss
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,6 +15,9 @@ import argparse
 import random
 from utils.utils import *
 from utils.opt import *
+from sklearn.metrics import accuracy_score,classification_report
+import pandas as pd
+
 
 N_CLASSES = 'n_classes'
 TEST_ACTIONS = 'test_actions'
@@ -23,7 +27,7 @@ ALL = 'all'
 BODY ='body'
 RH ='right_hand'
 LH ='left_hand'
-
+seed= 121
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -36,16 +40,29 @@ def set_seed(seed):
     random.seed(seed)
     print(f"seed : {seed}")
 
+def _read_data():
+    path = './data/data1'
+    npy_list, label_list = [], []
+    for root,_,flist in os.walk(path):
+        for ff in flist:
+            if ff.endswith('npy'):
+                npy = np.load(os.path.join(root,ff),allow_pickle=True)
+                """
+                npy = [ label_list, kp_list ]
+                labe_list= [y1, y2, y3...]
+                kp_list = [ kp1, kp2, kp3]
+                kp = body+rh+lh
+                """
+
+                npy_list.append(npy[1])
+                label_list.append(npy[0])
+    return np.vstack(npy_list), np.vstack(label_list)
 
 class TensorData(Dataset):
 
-    def __init__(self, args, is_train=True):
-        actions = actions_dict[args.actions]
+    def __init__(self, args, X, y):
         self.args = args
-        if is_train:
-            self.x_data, self.y_data = self.train_data(actions)
-        else:
-            self.x_data, self.y_data = self.test_data(actions)
+        self.x_data, self.y_data = X, y
         self.len = self.x_data.shape[0]
 
 
@@ -98,7 +115,6 @@ class TensorData(Dataset):
 
     def __len__(self):
         return self.len
-
     
 class Regressor(nn.Module):
     def __init__(self, num_class, num_feature):
@@ -132,8 +148,6 @@ class Regressor(nn.Module):
         return self.model(x)
 
 
-
-
 def print_results(pred, label, args):
     t1 = np.argmax(pred, axis=1)
     t2 = label
@@ -149,6 +163,9 @@ def print_results(pred, label, args):
         print(f'   {a:_>10} (#{pred_mask.shape[0]}): {acc:.2f}%')
 
 def import_class(name):
+    """
+    dont forget to update __init__.py 
+    """
     components = name.split('.')
     mod = __import__(components[0])  # import return model
     for comp in components[1:]:
@@ -159,7 +176,7 @@ def get_parser():
     parser = argparse.ArgumentParser(description='aaaa')
 
     ## Training
-    parser.add_argument('-e', '--eval', action='evaluation mode')
+    # parser.add_argument('-e', '--eval',  help='evaluation mode')
     parser.add_argument('-ep', '--epoch', type=int, default=200)
     parser.add_argument('--train_batch_size', default=32, type=int, help='index for body part')
     parser.add_argument('--test_batch_size', default=64, type=int, help='index for body part')
@@ -190,38 +207,48 @@ class Processor:
         self.args = args
         self.load_model()
         self.load_data()
-        if args.phase =='train':
-            self.train()
-        self.eval()
 
     def load_data(self):
-        trainsets = TensorData(self.args,  is_train= True)
+        X, y= _read_data()
+        trainx, valx , trainy, valy = train_test_split(X,y, test_size= 0.2, stratify=y,random_state=seed)
+
+        trainsets = TensorData(self.args,  trainx, trainy)
         self.trainloader = DataLoader(trainsets, batch_size=self.args.train_batch_size, shuffle=True)
         
-        testset = TensorData(self.args, is_train=False)
-        self.testloader = DataLoader(testset, batch_size=self.args.test_batch_size, shuffle=False)        
+        validset = TensorData(self.args, valx, valy)
+        self.validloader = DataLoader(validset, batch_size=self.args.test_batch_size, shuffle=False)        
 
-    def eval(self):
-        checkpoint = torch.load('checkpoint.pt')
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        # TODO make testset loader
+        # test_set = TensorData(self.args, valx, valy)
+        # self.testloader = DataLoader(validset, batch_size=self.args.test_batch_size, shuffle=False)        
+
+
+    def eval(self, verbose=0):
 
         predictions = torch.tensor([], dtype=torch.float) # 예측값을 저장하는 텐서.
         actual = torch.tensor([], dtype=torch.float) # 실제값을 저장하는 텐서.
-
+        target_names = []
         with torch.no_grad():
             self.model.eval() # 평가를 할 땐 반드시 eval()을 사용해야 한다.
 
-        for data in self.testloader:
+        for data in self.validloader:
             inputs, values = data
             outputs = self.model(inputs)
 
             predictions = torch.cat((predictions, outputs), 0) # cat함수를 통해 예측값을 누적.
             actual = torch.cat((actual, values), 0) # cat함수를 통해 실제값을 누적.
 
-        predictions = predictions.detach().numpy() # 넘파이 배열로 변경.
-        actual = actual.detach().numpy() # 넘파이 배열로 변경.
-        print_results(predictions, actual, self.args)
-    
+        # predictions = predictions.detach().numpy() # 넘파이 배열로 변경.
+        _target = actual.detach().numpy() # 넘파이 배열로 변경.
+        target_names = [idx2label(t) for t in _target]
+        # print_results(predictions, actual, self.args)
+        if verbose:
+            # target_names = [] # TODO fix here
+            target_names = label_list
+            print(classification_report(actual, predictions, target_names=target_names))
+        return accuracy_score(predictions,actual)
+
+        
     
     def load_model(self):
         Model = import_class(self.args.model)
@@ -251,6 +278,10 @@ class Processor:
                 running_loss += loss.item() # epoch 마다 평균 loss를 계산하기 위해 배치 loss를 더한다.
             
             loss_.append(running_loss/n) # MSE(Mean Squared Error) 계산
+
+            if self.args.no_eval:
+                eval()
+
         
         torch.save({
                 'epoch': epoch,

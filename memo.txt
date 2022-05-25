@@ -3,3 +3,17 @@
 - dataset 촬영시 앞뒤로 3~4프레임은 drop시키자. 라벨링 애매하니까.
 
 
+
+## Preparation
+
+- dataset mean and var 계산해서 normalize 좀 해야할듯.
+- albumentation skeleton autmentation도 이씀.
+
+
+work_dir/hand/model-adam
+
+- epoch은 필요가없는거같아. checkpoint저장해서 쭉 가면되는거니
+- learning_rate도 처음에 optimal값 찾으면 굳이 여러개 돌릴 필요없지않을까
+
+
+흠 이 프로젝트에 이렇게까지 공을 들여야하나

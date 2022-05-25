@@ -45,6 +45,7 @@ class Model(nn.Module):
         self.fc = nn.Linear(30, num_class, bias=True)
         nn.init.xavier_uniform_(self.fc.weight)
 
+
         
 
         self.model = nn.Sequential(self.layer1,

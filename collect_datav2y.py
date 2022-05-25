@@ -124,9 +124,7 @@ def collect_test(args, DATA_ROOT):
     h = round(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fourcc = cv2.VideoWriter_fourcc(*'DIVX')
     video_name = f'data_p{str(args.person).zfill(2)}_s{str(this_sample_id).zfill(3)}.avi'
-    video_path = os.path.join(DATA_ROOT, video_name)
-
-    writer = cv2.VideoWriter(video_path, fourcc, 20, (w, h))
+    writer = cv2.VideoWriter(video_name, fourcc, 24, (w, h))
 
     ### Main
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
@@ -141,21 +139,20 @@ def collect_test(args, DATA_ROOT):
 
         labels = []
         while 1:
+            ret, frame = cap.read()
             if actions_index >= len(target_actions):
                 break
 
-            ret, frame = cap.read()
             if ret is False:
                 break
 
             image, results = mediapipe_detection(frame, holistic)
-            vis_image = image.copy()
-            draw_landmarks(vis_image, results)
+            draw_landmarks(image, results)
             keypoints = extract_keypoints(results)
             curr_action = target_actions[actions_index]
 
             if wait_coutner < 50:
-                cv2.putText(vis_image, f'{curr_action} in {50 - wait_coutner}', (120,200), 
+                cv2.putText(image, f'{curr_action} in {50 - wait_coutner}', (120,200), 
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255, 0), 4, cv2.LINE_AA)
                 wait_coutner += 1
                 writer.write(frame)
@@ -164,7 +161,7 @@ def collect_test(args, DATA_ROOT):
             
             else:
                 if stacked_counter < args.seq:
-                    cv2.putText(vis_image, f'{curr_action}', (120,200), 
+                    cv2.putText(image, f'{curr_action}', (120,200), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255, 0), 4, cv2.LINE_AA)
                     writer.write(frame)
                     kp_list.append(keypoints)
@@ -179,7 +176,7 @@ def collect_test(args, DATA_ROOT):
 
             if cv2.waitKey(1) ==ord('q'):
                 break
-            cv2.imshow('OpenCV Feed', vis_image)
+            cv2.imshow('OpenCV Feed', image)
             
 
         npy_name = f'data_p{str(args.person).zfill(2)}_s{str(this_sample_id).zfill(3)}.npy'

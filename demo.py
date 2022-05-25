@@ -6,8 +6,8 @@ import yaml
 import numpy as np
 import argparse
 
-from src.tools import *
-from src.opt import *
+from utils.utils import *
+from utils.opt import *
 import random
 import mediapipe as mp
 import cv2
@@ -90,7 +90,7 @@ def get_parser():
     parser.add_argument('--type', type=str, default='body')
 
     ## Base
-    parser.add_argument('--config', type=str, default='./configs/train_small_body.yaml')
+    parser.add_argument('--config', type=str, default='./config/hand/train_mlp1_small_body.yaml')
     parser.add_argument('--phase', default='train', help='must be train or test')
     parser.add_argument('--actions', default=4, type=int , help='must be train or test')
     return parser

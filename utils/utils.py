@@ -109,3 +109,27 @@ def normalize_xyz(_hand, val):
 
     return xy_norm.ravel()
     
+def convert_old_trainset():
+    OLD_PATH ='../data/data1'
+    from opt import label2idx
+    npy_list = []
+    for r,_,flist in os.walk(OLD_PATH):
+        for f in flist:
+            npy_list.append(os.path.join(r,f))
+
+    trainx, trainy= [],[]
+    for npy_file in npy_list:
+        # npy = np.load(open(npy_file, 'rb'), allow_pickle=True)
+        npy = np.load(open(npy_file, 'rb'))
+        label = npy_file.split('/')[-2]
+        print(label, label2idx[label], npy.shape, npy_file)
+
+
+
+    # np.save(open(npy_path, 'wb'), np.array([labels, kp_list], dtype=object))
+
+
+    
+    # print(npy_list)
+if __name__=='__main__':
+    convert_old_trainset()
