@@ -17,7 +17,9 @@ import math
 
 mp_drawing = mp.solutions.drawing_utils
 mp_holistic = mp.solutions.holistic # Holistic model
-colors = [(245,117,16), (117,245,16), (16,117,245),(16,117,245),(16,117,245)]
+colors = [(245,117,16), (117,245,16), (16,117,245),(16,117,245),(16,117,245),
+    (245,117,16), (117,245,16), (16,117,245),(16,117,245),(16,117,245),
+    (245,117,16), (117,245,16), (16,117,245),(16,117,245),(16,117,245)]
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -90,7 +92,7 @@ def get_parser():
     parser.add_argument('--type', type=str, default='body')
 
     ## Base
-    parser.add_argument('--config', type=str, default='./config/hand/train_mlp1_small_body.yaml')
+    parser.add_argument('--config', type=str, default='./config/hand/mlp2_hand.yaml')
     parser.add_argument('--phase', default='train', help='must be train or test')
     parser.add_argument('--actions', default=4, type=int , help='must be train or test')
     return parser
@@ -111,7 +113,7 @@ class Processor:
     def run(self):
         cap = cv2.VideoCapture()
         cap.open(0)
-        checkpoint = torch.load('checkpoint.pt')
+        checkpoint = torch.load('./weights/model.mlp2.Model_lr0.0001_ep200/model_best.pt')
         self.model.load_state_dict(checkpoint['model_state_dict'])
         with torch.no_grad():
             self.model.eval()
@@ -126,6 +128,30 @@ class Processor:
                 image, results = mediapipe_detection(frame, holistic)
                 _kps = extract_keypoints(results)
                 body, _, rh = split_keypoints(_kps)
+                #####################################
+
+                kp5 = rh.reshape(-1,3)[5]
+                # x = kp5[0]
+                # y = kp5[1]
+                x = kp5[0]*frame.shape[1]
+                y = kp5[1]*frame.shape[0]
+                z= kp5[2]
+
+                kp0= rh.reshape(-1,3)[0][:2]
+                kp5 =rh.reshape(-1,3)[5][:2]
+                kp0[0] *=frame.shape[1]
+                kp0[1] *=frame.shape[0]
+                kp5[0] *=frame.shape[1]
+                kp5[1] *=frame.shape[0]
+                dist = np.linalg.norm(kp0-kp5)
+                
+
+                cv2.putText(image, f'{int(x)},{int(y)},{z:.2f}', (300, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2, cv2.LINE_AA)
+                cv2.putText(image, f'{dist:.4f}', (300, 350), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2, cv2.LINE_AA)
+                # cv2.putText(image, f'{rh[5]}', (300, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,0), 2, cv2.LINE_AA)
+
+
+                ####################################
 
                 if self.args.translate:
                     body, rh = translate(body), translate(rh)

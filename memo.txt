@@ -1,10 +1,35 @@
 
+# Dataset
+
+Data-format
+
+
+
+
+
+## preparation
+
+**normalization**
+model에 넣기전에 관절단위로 norm을 해준다. 근데 이미지의 경우 픽셀 0~255를 해주는건데 관절은 위치정보인데 이게 과연 의미가 있을까??
+
+**scaling**
+양 어깨너비 거리를 기준으로 스케일링 해준다.
+
+
+**Transformation**ㄴ
+- 관절 좌표 데이터에서 관절사이의 백터 데이터로 변환해주면 좀더 낫지않을까?
+
+
+
+
+-----------------------------------------------------------------
 - target_train_set_label에 없으면 전부 background행.
 - dataset 촬영시 앞뒤로 3~4프레임은 drop시키자. 라벨링 애매하니까.
 
 
 
 ## Preparation
+- data normalization: dataloader에서 std normalization 하는게 좋을듯하다.
 
 - dataset mean and var 계산해서 normalize 좀 해야할듯.
 - albumentation skeleton autmentation도 이씀.

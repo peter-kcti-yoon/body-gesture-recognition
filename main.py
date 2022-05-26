@@ -17,6 +17,7 @@ from utils.utils import *
 from utils.opt import *
 from sklearn.metrics import accuracy_score,classification_report
 import pandas as pd
+from torch.utils.tensorboard import SummaryWriter
 
 
 N_CLASSES = 'n_classes'
@@ -41,22 +42,18 @@ def set_seed(seed):
     print(f"seed : {seed}")
 
 def _read_data():
-    path = './data/data1'
+    path = './data/data3'
     npy_list, label_list = [], []
     for root,_,flist in os.walk(path):
         for ff in flist:
             if ff.endswith('npy'):
                 npy = np.load(os.path.join(root,ff),allow_pickle=True)
-                """
-                npy = [ label_list, kp_list ]
-                labe_list= [y1, y2, y3...]
-                kp_list = [ kp1, kp2, kp3]
-                kp = body+rh+lh
-                """
+                npy_list.extend(npy[:,:-1])
+                label_list.extend(npy[:, -1])
 
-                npy_list.append(npy[1])
-                label_list.append(npy[0])
-    return np.vstack(npy_list), np.vstack(label_list)
+    label_npy = np.vstack(label_list).squeeze().astype(np.int64)
+    
+    return np.vstack(npy_list).squeeze(), label_npy
 
 class TensorData(Dataset):
 
@@ -102,15 +99,24 @@ class TensorData(Dataset):
 
         return data
 
+    def vectorform(self, _data):
+
+        pass
 
     def __getitem__(self, index):
-
         data = self.x_data[index]
         data = self.process_data(data)
 
         
         x = torch.from_numpy(data).float()
-        y = torch.from_numpy(np.array(self.y_data[index])).long() 
+        
+        # y = np.array(label2idx[self.y_data[index]])
+        y = np.array(self.y_data[index])
+        # print(type(self.y_data[index]))
+        # print(self.y_data[index])
+        # quit()
+        y = torch.from_numpy(y).long() 
+        # y = torch.from_numpy(self.y_data[index]).long() 
         return x,y 
 
     def __len__(self):
@@ -178,11 +184,14 @@ def get_parser():
     ## Training
     # parser.add_argument('-e', '--eval',  help='evaluation mode')
     parser.add_argument('-ep', '--epoch', type=int, default=200)
+    parser.add_argument('-lr', '--learning_rate', type=float, default=1e-4)
     parser.add_argument('--train_batch_size', default=32, type=int, help='index for body part')
     parser.add_argument('--test_batch_size', default=64, type=int, help='index for body part')
 
     ## Eval
     parser.add_argument('--no_eval', default=False, type=bool, help='Only training w/o eval')
+    parser.add_argument('--test', default=False, type=bool, help='testing mode')
+
 
     ## Model
     parser.add_argument('--model', default=None)
@@ -193,23 +202,76 @@ def get_parser():
     ## data
     parser.add_argument('--translate', type=bool, default=True)
     parser.add_argument('--scale', type=bool, default=True)
+    parser.add_argument('--vector', type=bool, default=False)
     parser.add_argument('--type', type=str, default='body')
 
     ## Base
-    parser.add_argument('--config', type=str, default='./configs/train_small_body.yaml')
+    parser.add_argument('--config', type=str, default='./config/hand/mlp2_small_body.yaml')
     parser.add_argument('--phase', default='train', help='must be train or test')
     parser.add_argument('--actions', default=4, type=int , help='must be train or test')
     return parser
 
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 class Processor:
     def __init__(self, args):
         self.args = args
+        model_name =f'{args.model}_lr{args.learning_rate}_ep{args.epoch}'
+
+        self.init_dirs(model_name)
         self.load_model()
-        self.load_data()
+        
+
+
+        
+        self.train_writer = SummaryWriter(f'./logs/{model_name}/train', 'train')
+        self.valid_writer = SummaryWriter(f'./logs/{model_name}/valid', 'valid')
+        self.avg = AverageMeter()
+        
+        if args.test:
+            self.test()
+        else:
+            self.load_data()
+            self.train()
+
+
+    def init_dirs(self,model_name):
+        self.weight_path = os.path.join('./weights',model_name)
+        if not os.path.exists(self.weight_path):
+            os.makedirs(self.weight_path)
+        
+        log_path = os.path.join('./logs',model_name)
+        if not os.path.exists(log_path):
+            os.makedirs(log_path)
+
+
+    def save_arg(self):
+        # save arg
+        arg_dict = vars(self.arg)
+        if not os.path.exists(self.weight_path):
+            os.makedirs(self.weight_path)
+        with open('{}/config.yaml'.format(self.weight_path), 'w') as f:
+            yaml.dump(arg_dict, f)
+
 
     def load_data(self):
         X, y= _read_data()
+        print('Load data', X.shape, y.shape)
         trainx, valx , trainy, valy = train_test_split(X,y, test_size= 0.2, stratify=y,random_state=seed)
 
         trainsets = TensorData(self.args,  trainx, trainy)
@@ -222,12 +284,11 @@ class Processor:
         # test_set = TensorData(self.args, valx, valy)
         # self.testloader = DataLoader(validset, batch_size=self.args.test_batch_size, shuffle=False)        
 
-
-    def eval(self, verbose=0):
-
+    def test(self):
         predictions = torch.tensor([], dtype=torch.float) # 예측값을 저장하는 텐서.
         actual = torch.tensor([], dtype=torch.float) # 실제값을 저장하는 텐서.
         target_names = []
+
         with torch.no_grad():
             self.model.eval() # 평가를 할 땐 반드시 eval()을 사용해야 한다.
 
@@ -235,18 +296,27 @@ class Processor:
             inputs, values = data
             outputs = self.model(inputs)
 
+            _target = actual.detach().numpy() # 넘파이 배열로 변경.
+            target_names = [idx2label(t) for t in _target]
+
             predictions = torch.cat((predictions, outputs), 0) # cat함수를 통해 예측값을 누적.
             actual = torch.cat((actual, values), 0) # cat함수를 통해 실제값을 누적.
 
-        # predictions = predictions.detach().numpy() # 넘파이 배열로 변경.
-        _target = actual.detach().numpy() # 넘파이 배열로 변경.
-        target_names = [idx2label(t) for t in _target]
-        # print_results(predictions, actual, self.args)
-        if verbose:
-            # target_names = [] # TODO fix here
-            target_names = label_list
-            print(classification_report(actual, predictions, target_names=target_names))
-        return accuracy_score(predictions,actual)
+    def eval(self):
+        
+        with torch.no_grad():
+            self.model.eval() # 평가를 할 땐 반드시 eval()을 사용해야 한다.
+
+        for data in self.validloader:
+            inputs, values = data
+            outputs = self.model(inputs)
+            outputs = self.softmax(outputs)
+            outputs = torch.argmax(outputs, dim=1)
+            # print(outputs.detach().numpy(),values.detach().numpy())
+
+            acc = accuracy_score(outputs.detach().numpy(),values.detach().numpy())
+            self.avg.update(acc , values.shape[0])
+
 
         
     
@@ -255,47 +325,65 @@ class Processor:
         print(Model)
         self.model = Model(**self.args.model_args)
         self.loss = nn.CrossEntropyLoss()
+        self.softmax = nn.Softmax(dim=1)
 
     def train(self):
-        optimizer = optim.Adam(self.model.parameters(), lr=0.00001, weight_decay=1e-8)
-        # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+        self.optimizer = optim.Adam(self.model.parameters(), 
+                        lr=self.args.learning_rate, weight_decay=1e-8)
 
-        loss_ = [] # loss를 저장할 리스트.
-        n = len(self.trainloader)
+        # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+        best_epoch_acc = 0
+        self.global_step =0
         name_desc = tqdm(range(self.args.epoch))
         for epoch in name_desc:
             running_loss = 0.0 # 한 에폭이 돌 때 그안에서 배치마다 loss가 나온다. 즉 한번 학습할 때 그렇게 쪼개지면서 loss가 다 나오니 MSE를 구하기 위해서 사용한다.
             for i, data in enumerate(self.trainloader, 0): # 무작위로 섞인 32개의 데이터가 담긴 배치가 하나씩 들어온다.
-                
+                self.global_step += 1
                 inputs, values = data # data에는 X, Y가 들어있다.
-                optimizer.zero_grad() # 최적화 초기화.
+                self.optimizer.zero_grad() # 최적화 초기화.
 
                 outputs = self.model(inputs) # 모델에 입력값을 넣어 예측값을 산출한다.
                 loss = self.loss(outputs, values) # 손실함수를 계산. error 계산.
                 loss.backward() # 손실 함수를 기준으로 역전파를 설정한다.
-                optimizer.step() # 역전파를 진행하고 가중치를 업데이트한다.
+                self.optimizer.step() # 역전파를 진행하고 가중치를 업데이트한다.
 
                 running_loss += loss.item() # epoch 마다 평균 loss를 계산하기 위해 배치 loss를 더한다.
             
-            loss_.append(running_loss/n) # MSE(Mean Squared Error) 계산
+                
+                if i %10 == 0:
+                    
+                    outputs = torch.argmax(self.softmax(outputs), dim=1)
+                    train_acc = torch.mean((values==outputs).float())
+                    self.eval()
+                    self.train_writer.add_scalar('Loss', loss, self.global_step)
+                    self.train_writer.add_scalar('Accuracy', train_acc, self.global_step)
+                    self.valid_writer.add_scalar('Accuracy', self.avg.avg, self.global_step)
+                        
+                    msg = f'Epoch: {str(epoch).zfill(3)}, Step:{self.global_step}, Acc: {self.avg.avg:.4f}' 
+                    name_desc.set_description(msg)
+                    
+            self.save_weight(epoch, False)
+            if best_epoch_acc < self.avg.avg:
+                best_epoch_acc = self.avg.avg
+                self.save_weight(epoch, True)
 
-            if self.args.no_eval:
-                eval()
 
-        
+
+        print('Model Best', best_epoch_acc)  
+    def save_weight(self,epoch, is_best=False):
+        if is_best:
+            model_name = 'model_best'
+        else:
+            model_name = 'model_weights'
+
         torch.save({
-                'epoch': epoch,
-                'model_state_dict': self.model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss,
-                }, 'checkpoint.pt')
-        
+                    'epoch': epoch,
+                    'global_step':self.global_step,
+                    'model_state_dict': self.model.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict(),
+                    'loss': self.loss,
+                    }, f'{self.weight_path}/{model_name}.pt')
 
-        
-        plt.plot(loss_)
-        plt.title('Loss')
-        plt.xlabel('epoch')
-        plt.show()        
 
 
 if __name__=='__main__':

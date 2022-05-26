@@ -1,0 +1,35 @@
+# feeder
+phase: train
+
+# data
+translate: True
+scale: True
+type: hand
+actions: 8 # action index
+
+# Training
+epoch: 200
+train_batch_size: 128
+test_batch_size: 4
+# model
+model: model.mlp2.Model
+model_args:
+  num_class: 10
+  num_feature: 63
+
+
+
+
+  # graph: graph.ntu_rgb_d.Graph
+  # graph_args:
+  #   labeling_mode: 'spatial'
+
+
+# test 
+# phase: test
+# device: [0,1,2,3]
+# test_batch_size: 256
+# weights: ./runs/ntu_cv_agcn_bone-49-29400.pt
+# work_dir: ./work_dir/ntu/xview/agcn_test_bone
+# model_saved_name: ./runs/ntu_cv_agcn_test_bone
+# save_score: True

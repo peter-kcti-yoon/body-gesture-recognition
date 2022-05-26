@@ -160,7 +160,7 @@ def collect_test(args, DATA_ROOT):
                 wait_coutner += 1
                 writer.write(frame)
                 kp_list.append(keypoints)
-                labels.append(SIGN_BACKGROUND)
+                labels.append(label2idx[SIGN_BACKGROUND])
             
             else:
                 if stacked_counter < args.seq:
@@ -168,7 +168,7 @@ def collect_test(args, DATA_ROOT):
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255, 0), 4, cv2.LINE_AA)
                     writer.write(frame)
                     kp_list.append(keypoints)
-                    labels.append(curr_action)
+                    labels.append(label2idx[curr_action])
                     stacked_counter += 1
 
                 else: # done
@@ -185,7 +185,10 @@ def collect_test(args, DATA_ROOT):
         npy_name = f'data_p{str(args.person).zfill(2)}_s{str(this_sample_id).zfill(3)}.npy'
         npy_path = os.path.join(DATA_ROOT, npy_name)
         print('Saving at', npy_path)
-        np.save(open(npy_path, 'wb'), np.array([labels, kp_list], dtype=object))
+        labels = np.array(labels).reshape(-1,1)
+        output = np.append(kp_list, labels, axis=1)
+        np.save(open(npy_path, 'wb'), output)
+        # np.save(open(npy_path, 'wb'), np.array([labels, kp_list]))
         writer.release()
         cap.release()
         cv2.destroyAllWindows()

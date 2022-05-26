@@ -1,24 +1,20 @@
 # feeder
-
-
-
 phase: train
 
 # data
 translate: True
 scale: True
 type: hand
-actions: 5
-
+actions: 8 # action index
 
 # Training
 epoch: 200
-train_batch_size: 32
-test_batch_size: 128
+train_batch_size: 128
+test_batch_size: 4
 # model
 model: model.mlp1.Model
 model_args:
-  num_class: 5
+  num_class: 10
   num_feature: 63
 
 

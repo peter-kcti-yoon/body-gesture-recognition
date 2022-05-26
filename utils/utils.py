@@ -1,6 +1,35 @@
 import numpy as np
 import os
+def convert_old_data():
+    SIGN_BACKGROUND ='background'
+    SIGN_OKAY      ='Confirm'
+    SIGN_CANCEL    ='Cancel'
+    SIGN_POINT     ='Pointing'
+    SIGN_GRIPP     ='Gripping'
+    SIGN_HELLO     ='Hello'
+    SIGN_TWO       ='Two'
+    SIGN_BEST      ='Best'
+    SIGN_LEFT      ='Left'
+    SIGN_RIGHT     ='Right'
 
+    ######################################
+    ## Do not fix the order
+    label_list = [SIGN_BACKGROUND, SIGN_OKAY, SIGN_CANCEL, SIGN_POINT,SIGN_GRIPP,
+                SIGN_HELLO,SIGN_TWO, SIGN_BEST,SIGN_LEFT,SIGN_RIGHT]
+
+    label2idx = { label:idx for idx,label in enumerate(label_list)}
+    idx2label={idx:label2idx[idx] for idx in label2idx.keys()}
+    npy_list_list = []
+    for root,_,flist in os.walk('./data/data1'):
+        for ff in flist:
+            label_str = ff.split('_')[0]
+            npy = np.load(os.path.join(root,ff), allow_pickle=True)
+            labels = [label2idx[label_str]]*npy.shape[0]
+            npy = np.append(npy, np.array(labels).reshape(-1,1), axis=1)        
+            npy_list_list.append(npy)
+    
+    np.save(open('./data/data3/data_p01_s001.npy', 'wb'), 
+                 np.vstack(npy_list_list))
 
 
 def unpack_dataset(_X,_y):
@@ -108,28 +137,8 @@ def normalize_xyz(_hand, val):
     xy_norm =  xy- origin
 
     return xy_norm.ravel()
-    
-def convert_old_trainset():
-    OLD_PATH ='../data/data1'
-    from opt import label2idx
-    npy_list = []
-    for r,_,flist in os.walk(OLD_PATH):
-        for f in flist:
-            npy_list.append(os.path.join(r,f))
-
-    trainx, trainy= [],[]
-    for npy_file in npy_list:
-        # npy = np.load(open(npy_file, 'rb'), allow_pickle=True)
-        npy = np.load(open(npy_file, 'rb'))
-        label = npy_file.split('/')[-2]
-        print(label, label2idx[label], npy.shape, npy_file)
-
-
-
-    # np.save(open(npy_path, 'wb'), np.array([labels, kp_list], dtype=object))
-
-
+ 
     
     # print(npy_list)
 if __name__=='__main__':
-    convert_old_trainset()
+    convert_old_data()
