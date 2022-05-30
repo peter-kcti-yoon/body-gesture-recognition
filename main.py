@@ -206,7 +206,7 @@ def get_parser():
     parser.add_argument('--type', type=str, default='body')
 
     ## Base
-    parser.add_argument('--config', type=str, default='./config/hand/mlp2_small_body.yaml')
+    parser.add_argument('--config', type=str, default='./config/hand/mlp1_hand.yaml')
     parser.add_argument('--phase', default='train', help='must be train or test')
     parser.add_argument('--actions', default=4, type=int , help='must be train or test')
     return parser
@@ -231,14 +231,12 @@ class AverageMeter(object):
 class Processor:
     def __init__(self, args):
         self.args = args
-        model_name =f'{args.model}_lr{args.learning_rate}_ep{args.epoch}'
+        model_name = args.model.split('.')[1]
+        model_name =f'{model_name}_lr{args.learning_rate}_ep{args.epoch}'
 
         self.init_dirs(model_name)
         self.load_model()
-        
-
-
-        
+                
         self.train_writer = SummaryWriter(f'./logs/{model_name}/train', 'train')
         self.valid_writer = SummaryWriter(f'./logs/{model_name}/valid', 'valid')
         self.avg = AverageMeter()

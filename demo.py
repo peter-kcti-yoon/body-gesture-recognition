@@ -113,7 +113,7 @@ class Processor:
     def run(self):
         cap = cv2.VideoCapture()
         cap.open(0)
-        checkpoint = torch.load('./weights/model.mlp2.Model_lr0.0001_ep200/model_best.pt')
+        checkpoint = torch.load('./weights/mlp2_lr0.0001_ep200/model_weights.pt')
         self.model.load_state_dict(checkpoint['model_state_dict'])
         with torch.no_grad():
             self.model.eval()
