@@ -39,35 +39,25 @@ def unpack_dataset(_X,_y):
 
     return _X.reshape(-1,258), y
 
-def normalize(_raw, ch=2):
-    # translate
-    # scaling
+def vectorform(self, _data):
+    pass
 
-    # body 33*4 x,y,z,v
-    # hand 21*3 x,y,z
-    _pose, _lh, _rh = split_keypoints(_raw)
-
-    pose = _pose.reshape(-1,4)[:,:ch]
-    lh = _lh.reshape(-1,3)[:,:ch]
-    rh = _rh.reshape(-1,3)[:,:ch]
-
-    return pose, lh, rh
 
 def translate(raw):
+    """
+    shape shold be  (-1,n)
+    """
+    assert len(raw.shape) ==2, "shape shold be  (-1,n)"
     origin = raw[0] 
     return raw - origin
 
-def scaling(pose, rh, lh=None):
-    c1 = pose[12] - pose[11]
-    c2 = pose[24] - pose[23]
-
-    s = np.linalg.norm(c1-c2)
-
-    if lh:
-        return pose/s, lh/s, rh/s
-    else:
-        return pose/s, rh/s
-
+def scaling(_data, hand = True):
+    
+    p1 = _data[0]
+    p2 = _data[5]
+    s = np.linalg.norm(p1-p2)
+    return _data/s
+    
 
 def load_dataset(ver, actions):
     data_root = f'./data/data{ver}'
@@ -104,7 +94,7 @@ def get_n_feature(m, c):
 
 def split_keypoints(_raw):
     """
-    _raw: 285
+    _raw: 258
     return 33*4, 21*3, 21*3
     """
     

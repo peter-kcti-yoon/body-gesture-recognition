@@ -18,7 +18,8 @@ from utils.opt import *
 from sklearn.metrics import accuracy_score,classification_report
 import pandas as pd
 from torch.utils.tensorboard import SummaryWriter
-
+from sklearn.preprocessing import LabelEncoder
+from sklearn.manifold import TSNE
 
 N_CLASSES = 'n_classes'
 TEST_ACTIONS = 'test_actions'
@@ -41,6 +42,28 @@ def set_seed(seed):
     random.seed(seed)
     print(f"seed : {seed}")
 
+
+def _read_data3(npy_name_list):
+
+    X,y = [],[]
+    for npy_name in npy_name_list:
+        npy = np.load(os.path.join('./data/data3',npy_name))
+        _X = npy[:,:258]
+        _y = npy[:,-1]
+
+        _X = _X[np.where(_y!=0)]
+        _y = _y[np.where(_y!=0)]
+        X.extend(_X)
+        y.extend(_y)
+        # X.append(_X)
+        # y.append(_y)
+        # return np.vstack(X).squeeze(), np.vstack(y).squeeze()
+
+    return np.array(X), np.array(y)
+
+
+
+
 def _read_data():
     path = './data/data3'
     npy_list, label_list = [], []
@@ -57,102 +80,65 @@ def _read_data():
 
 class TensorData(Dataset):
 
-    def __init__(self, args, X, y):
+    def __init__(self, args, X, y, train=False):
         self.args = args
-        self.x_data, self.y_data = X, y
+        self.is_train = train
+        self.le = LabelEncoder()
+        self.le.fit(y)
+        self.y_data = self.le.transform(y)
+        self.x_data = X
         self.len = self.x_data.shape[0]
+        
 
+        
 
-    def train_data(self, actions):
-        x_data, y_data = load_dataset(1, actions)
-        x_data, y_data = unpack_dataset(x_data, y_data)
-        y_data = np.array([ actions.index(a) for a in y_data])
-        return x_data, y_data
+    def transform(self, data):
+        body, _, rh = split_keypoints(data)
+        body = body.reshape(-1,4)
+        rh  = rh.reshape(-1, 3)
 
-    def test_data(self,actions):
-        x_data, y_data= load_testset(1)
-
-        masking = []
-        for i,la in enumerate(y_data):
-            if la in actions:
-                masking.append(i)
-
-        masking = np.array(masking)
-        x_data = x_data[masking]
-        y_data = y_data[masking]
-        y_data = np.array([ actions.index(a) for a in y_data])
-
-        return x_data, y_data
-
-    def process_data(self, _data):
-        body, _, rh = split_keypoints(_data)
-
+        if self.args.onlyxy:
+            body,rh =  body[:,:2], rh[:, :2]
         if self.args.translate:
             body, rh = translate(body), translate(rh)
         if self.args.scale:
-            body, rh  = scaling(body,rh)
+            rh  = scaling(rh)
+        if self.args.vector:
+            body,rh = vectorform(body),vectorform(rh)
+
         
-        if self.args.type =='body':
-            data = np.concatenate([body, rh ])
+        data = rh.ravel()
+        return torch.from_numpy(data).float()
+
+
+    def __getitem__(self, index): 
+        anchor_data = self.x_data[index]
+        anchor_label = self.y_data[index]
+        if self.is_train:    
+            _x_data = np.delete(self.x_data, index, axis=0)
+            _y_data = np.delete(self.y_data, index, axis=0)
+            positive_list = np.where(_y_data == anchor_label)[0]
+            negative_list = np.where(_y_data != anchor_label)[0]
+            pos_idx = np.random.choice(positive_list,1)[0]
+            neg_idx = np.random.choice(negative_list,1)[0]
+            # print('>>>>>>>>>>>>', pos_idx, neg_idx)
+            pos_data ,neg_data =  _x_data[pos_idx], _x_data[neg_idx]
+            # print('>>>>>>>>>>>>', pos_data.shape, neg_data.shape)
+
+            anchor_data = self.transform(anchor_data)
+            pos_data = self.transform(pos_data)
+            neg_data = self.transform(neg_data)
+            anchor_label = torch.from_numpy(np.array(anchor_label)).long()
+     
+            return anchor_data, pos_data, neg_data, anchor_label
         else:
-            data = rh
-
-        return data
-
-    def vectorform(self, _data):
-
-        pass
-
-    def __getitem__(self, index):
-        data = self.x_data[index]
-        data = self.process_data(data)
-
-        
-        x = torch.from_numpy(data).float()
-        
-        # y = np.array(label2idx[self.y_data[index]])
-        y = np.array(self.y_data[index])
-        # print(type(self.y_data[index]))
-        # print(self.y_data[index])
-        # quit()
-        y = torch.from_numpy(y).long() 
-        # y = torch.from_numpy(self.y_data[index]).long() 
-        return x,y 
+            anchor_data = self.transform(anchor_data)
+            anchor_label = torch.from_numpy(np.array(anchor_label)).long()
+            return anchor_data, anchor_label
 
     def __len__(self):
         return self.len
-    
-class Regressor(nn.Module):
-    def __init__(self, num_class, num_feature):
-        super().__init__() # 모델 연산 정의
-        self.fc1 = nn.Linear(num_feature, 330, bias=True) 
-        self.fc2 = nn.Linear(330, 160, bias=True) 
-        self.fc3 = nn.Linear(160, 80, bias=True) 
-        self.fc4 = nn.Linear(80, 30, bias=True)         
-        self.fc = nn.Linear(30, num_class, bias=True) 
-        
-        torch.nn.init.xavier_uniform_(self.fc1.weight)
-        torch.nn.init.xavier_uniform_(self.fc2.weight)
-        torch.nn.init.xavier_uniform_(self.fc3.weight)
-        torch.nn.init.xavier_uniform_(self.fc4.weight)
-        torch.nn.init.xavier_uniform_(self.fc.weight)
-
-        self.relu = torch.nn.ReLU()
-        self.bn1 = nn.BatchNorm1d(330)
-        self.bn2 = nn.BatchNorm1d(160)
-        self.bn3 = nn.BatchNorm1d(80)
-        self.bn4 = nn.BatchNorm1d(30)
-        self.dropout = nn.Dropout(0.1) 
-
-        self.model = nn.Sequential(self.fc1, self.bn1, self.relu,
-                                   self.fc2, self.bn2, self.relu, self.dropout,
-                                   self.fc3, self.bn3, self.relu, self.dropout,
-                                   self.fc4 ,self.bn4, self.relu, self.dropout,
-                                   self.fc)       
-
-    def forward(self, x): # 모델 연산의 순서를 정의
-        return self.model(x)
-
+ 
 
 def print_results(pred, label, args):
     t1 = np.argmax(pred, axis=1)
@@ -190,7 +176,7 @@ def get_parser():
 
     ## Eval
     parser.add_argument('--no_eval', default=False, type=bool, help='Only training w/o eval')
-    parser.add_argument('--test', default=False, type=bool, help='testing mode')
+    parser.add_argument('--test', action='store_true',default=False, help='testing mode')
 
 
     ## Model
@@ -200,8 +186,9 @@ def get_parser():
 
 
     ## data
-    parser.add_argument('--translate', type=bool, default=True)
-    parser.add_argument('--scale', type=bool, default=True)
+    parser.add_argument('--translate', type=bool, default=False)
+    parser.add_argument('--scale', type=bool, default=False)
+    parser.add_argument('--onlyxy', type=bool, default=False)
     parser.add_argument('--vector', type=bool, default=False)
     parser.add_argument('--type', type=str, default='body')
 
@@ -240,11 +227,10 @@ class Processor:
         self.train_writer = SummaryWriter(f'./logs/{model_name}/train', 'train')
         self.valid_writer = SummaryWriter(f'./logs/{model_name}/valid', 'valid')
         self.avg = AverageMeter()
-        
+        self.load_data()
         if args.test:
-            self.test()
+            self.test2()
         else:
-            self.load_data()
             self.train()
 
 
@@ -268,21 +254,52 @@ class Processor:
 
 
     def load_data(self):
-        X, y= _read_data()
-        print('Load data', X.shape, y.shape)
-        trainx, valx , trainy, valy = train_test_split(X,y, test_size= 0.2, stratify=y,random_state=seed)
-
-        trainsets = TensorData(self.args,  trainx, trainy)
-        self.trainloader = DataLoader(trainsets, batch_size=self.args.train_batch_size, shuffle=True)
+        trainx,trainy = _read_data3(['data_p01_s001.npy','data_p01_s002.npy','data_p01_s003.npy'])
         
-        validset = TensorData(self.args, valx, valy)
-        self.validloader = DataLoader(validset, batch_size=self.args.test_batch_size, shuffle=False)        
+        valx, valy    = _read_data3(['data_p02_s001.npy','data_p02_s002.npy','data_p02_s003.npy'])
+        self.trainsets = TensorData(self.args,  trainx, trainy, train=True)
+        self.trainloader = DataLoader(self.trainsets, batch_size=self.args.train_batch_size, shuffle=True)
+        
+        self.validset = TensorData(self.args, valx, valy)
+        self.validloader = DataLoader(self.validset, batch_size=self.args.test_batch_size, shuffle=False)        
 
         # TODO make testset loader
         # test_set = TensorData(self.args, valx, valy)
         # self.testloader = DataLoader(validset, batch_size=self.args.test_batch_size, shuffle=False)        
 
+    def test2(self):
+        k = 10
+        # tmpset =TensorData(self.args, None,None)
+        # trainx,trainy = _read_data3(['data_p01_s001.npy','data_p01_s002.npy','data_p01_s003.npy'])
+
+        checkpoint = torch.load('./weights/trip1_lr0.0001_ep400/model_weights.pt')
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        train_results,labels  = [], []
+        with torch.no_grad():
+            self.model.eval() # 평가를 할 땐 반드시 eval()을 사용해야 한다.
+
+        for img, label in self.validloader:
+            res = self.model(img).detach().numpy()
+            train_results.append(res)
+            labels.append(label.detach().numpy())
+
+        train_results = np.concatenate(train_results)
+        labels = np.concatenate(labels)
+        tsne = TSNE(n_components=2, learning_rate='auto',init='random')
+        transformed = tsne.fit_transform(train_results)
+        plt.figure(figsize=(15, 10), facecolor="azure")
+        for label in np.unique(labels):
+            print(label, type(label))
+            l = self.validset.le.inverse_transform([label])
+            str_label = idx2label[l[0]]
+            tmp = transformed[labels==label]
+            plt.scatter(tmp[:, 0], tmp[:, 1], label=str_label)
+
+        plt.legend()
+        plt.show()
+
     def test(self):
+
         predictions = torch.tensor([], dtype=torch.float) # 예측값을 저장하는 텐서.
         actual = torch.tensor([], dtype=torch.float) # 실제값을 저장하는 텐서.
         target_names = []
@@ -322,7 +339,8 @@ class Processor:
         Model = import_class(self.args.model)
         print(Model)
         self.model = Model(**self.args.model_args)
-        self.loss = nn.CrossEntropyLoss()
+        # self.loss = nn.CrossEntropyLoss()
+        self.loss = nn.TripletMarginLoss(margin=1.0, p=2)
         self.softmax = nn.Softmax(dim=1)
 
     def train(self):
@@ -337,33 +355,40 @@ class Processor:
             running_loss = 0.0 # 한 에폭이 돌 때 그안에서 배치마다 loss가 나온다. 즉 한번 학습할 때 그렇게 쪼개지면서 loss가 다 나오니 MSE를 구하기 위해서 사용한다.
             for i, data in enumerate(self.trainloader, 0): # 무작위로 섞인 32개의 데이터가 담긴 배치가 하나씩 들어온다.
                 self.global_step += 1
-                inputs, values = data # data에는 X, Y가 들어있다.
+                anchor_data, pos_data, neg_data, anchor_label = data # data에는 X, Y가 들어있다.
                 self.optimizer.zero_grad() # 최적화 초기화.
 
-                outputs = self.model(inputs) # 모델에 입력값을 넣어 예측값을 산출한다.
-                loss = self.loss(outputs, values) # 손실함수를 계산. error 계산.
+                anchor_out = self.model(anchor_data) 
+                pos_out = self.model(pos_data) 
+                neg_out = self.model(neg_data) 
+                loss = self.loss(anchor_out, pos_out, neg_out) # 손실함수를 계산. error 계산.
                 loss.backward() # 손실 함수를 기준으로 역전파를 설정한다.
                 self.optimizer.step() # 역전파를 진행하고 가중치를 업데이트한다.
 
                 running_loss += loss.item() # epoch 마다 평균 loss를 계산하기 위해 배치 loss를 더한다.
             
                 
-                if i %10 == 0:
-                    
-                    outputs = torch.argmax(self.softmax(outputs), dim=1)
-                    train_acc = torch.mean((values==outputs).float())
-                    self.eval()
+                if i %20 == 0:
+                    dist_pos = torch.norm(anchor_out-pos_out, 2).mean()
+                    dist_neg = torch.norm(anchor_out-neg_out, 2).mean()    
+                    # outputs = torch.argmax(self.softmax(outputs), dim=1)
+                    # train_acc = torch.mean((values==outputs).float())
+                    # self.eval()
                     self.train_writer.add_scalar('Loss', loss, self.global_step)
-                    self.train_writer.add_scalar('Accuracy', train_acc, self.global_step)
-                    self.valid_writer.add_scalar('Accuracy', self.avg.avg, self.global_step)
+                    self.train_writer.add_scalar('dist_pos', dist_pos, self.global_step)
+                    self.train_writer.add_scalar('dist_neg', dist_neg, self.global_step)
+                    # self.train_writer.add_scalar('Accuracy', train_acc, self.global_step)
+                    # self.valid_writer.add_scalar('Accuracy', self.avg.avg, self.global_step)
                         
-                    msg = f'Epoch: {str(epoch).zfill(3)}, Step:{self.global_step}, Acc: {self.avg.avg:.4f}' 
+                    # msg = f'Epoch: {str(epoch).zfill(3)}, Step:{self.global_step}, Acc: {self.avg.avg:.4f}' 
+                    msg = f'Epoch: {str(epoch).zfill(3)}, Step:{self.global_step} Pos: {dist_pos.detach():.3f}, Neg: {dist_neg.detach():.3f}'
+
                     name_desc.set_description(msg)
                     
             self.save_weight(epoch, False)
-            if best_epoch_acc < self.avg.avg:
-                best_epoch_acc = self.avg.avg
-                self.save_weight(epoch, True)
+            # if best_epoch_acc < self.avg.avg:
+                # best_epoch_acc = self.avg.avg
+                # self.save_weight(epoch, True)
 
 
 

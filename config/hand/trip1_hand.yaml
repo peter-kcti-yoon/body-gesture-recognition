@@ -1,0 +1,41 @@
+# feeder
+phase: train
+# test: False
+# data
+translate: True
+scale: True
+vector: False
+onlyxy: True
+
+type: hand
+actions: 8 # action index
+
+# Training
+epoch: 200
+train_batch_size: 128
+test_batch_size: 128
+# model
+model: model.trip1.Model
+model_args:
+  num_class: 10
+  num_feature: 42
+
+
+# Testing
+# weights: ./weights/trip1_lr0.0001_ep400/model_weights.pt
+
+
+
+  # graph: graph.ntu_rgb_d.Graph
+  # graph_args:
+  #   labeling_mode: 'spatial'
+
+
+# test 
+# phase: test
+# device: [0,1,2,3]
+# test_batch_size: 256
+# weights: ./runs/ntu_cv_agcn_bone-49-29400.pt
+# work_dir: ./work_dir/ntu/xview/agcn_test_bone
+# model_saved_name: ./runs/ntu_cv_agcn_test_bone
+# save_score: True

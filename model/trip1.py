@@ -37,13 +37,13 @@ class Model(nn.Module):
     def __init__(self, num_class, num_feature):
         super().__init__()
 
-        self.layer1 = layer(num_feature, 128)
-        self.layer2 = layer(128,128)
-        self.layer3 = layer(128, 64, is_dropout=True)
-        self.layer4 = layer(64, 32, is_dropout=True)
+        self.layer1 = layer(num_feature, 390)
+        self.layer2 = layer(390, 390)
+        self.layer3 = layer(390, 195, is_dropout=True)
+        self.layer4 = layer(195, 100, is_dropout=True)
         # self.layer5 = layer(100, 50, dropout=True)
         # self.layer6 = layer(100, num_feature)
-        self.fc = nn.Linear(32, num_class)
+        self.fc = nn.Linear(100, num_class)
     
         
 

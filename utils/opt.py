@@ -24,18 +24,15 @@ label_list = [SIGN_BACKGROUND, SIGN_OKAY, SIGN_CANCEL, SIGN_POINT,SIGN_GRIPP,
              SIGN_HELLO,SIGN_TWO, SIGN_BEST,SIGN_LEFT,SIGN_RIGHT]
 
 label2idx = { label:idx for idx,label in enumerate(label_list)}
-idx2label={idx:label2idx[idx] for idx in label2idx.keys()}
+idx2label={label2idx[label]:label for label in label2idx.keys()}
 
 #####################################
 
 actions_dict={
-     1: [SIGN_CANCEL, SIGN_GRIPP, SIGN_OKAY, SIGN_POINT, SIGN_HELLO]
-    ,2: [SIGN_CANCEL, SIGN_GRIPP, SIGN_OKAY, SIGN_HELLO, SIGN_TWO, SIGN_BEST]
-    ,3: [SIGN_CANCEL, SIGN_GRIPP, SIGN_OKAY, SIGN_HELLO]
-    ,4: [SIGN_CANCEL, SIGN_GRIPP, SIGN_OKAY, SIGN_HELLO, SIGN_BEST]
-    ,5: [SIGN_CANCEL, SIGN_GRIPP, SIGN_OKAY, SIGN_BEST] #4
-    ,5: [SIGN_GRIPP, SIGN_OKAY, SIGN_HELLO,SIGN_TWO, SIGN_BEST] #5
+
+    6: [SIGN_BACKGROUND,SIGN_OKAY, SIGN_GRIPP, SIGN_HELLO,SIGN_TWO, SIGN_BEST] #5
 
     ,42: [SIGN_CANCEL, SIGN_GRIPP, SIGN_OKAY, SIGN_HELLO, SIGN_TWO, SIGN_BEST]
-    ,8 : label_list
+    ,8 : [SIGN_BACKGROUND, SIGN_OKAY, SIGN_GRIPP,
+             SIGN_HELLO,SIGN_TWO, SIGN_BEST,SIGN_LEFT,SIGN_RIGHT]
 }
