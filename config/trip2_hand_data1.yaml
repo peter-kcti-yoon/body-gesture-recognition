@@ -20,6 +20,7 @@ model_args:
   num_class: 7
   num_feature: 42
 
+work_dir: './work_dir/trip2'
 
 # Testing
 # weights: ./weights/trip1_lr0.0001_ep400/model_weights.pt
