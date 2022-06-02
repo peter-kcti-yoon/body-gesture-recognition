@@ -1,1 +1,1 @@
-from . import mlp1, mlp2, trip1
+from . import mlp1, mlp2, trip1, trip2

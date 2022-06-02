@@ -1,5 +1,4 @@
 # ANN module
-from os import pread
 import sys
 sys.path.append('..')
 import torch
@@ -15,7 +14,6 @@ import cv2
 
 from torch.nn import Softmax
 import math
-import pickle
 
 mp_drawing = mp.solutions.drawing_utils
 mp_holistic = mp.solutions.holistic # Holistic model
@@ -36,9 +34,8 @@ def set_seed(seed):
 
 def prob_viz(image, actions, pred):
     output_frame = image.copy()
-    for num in actions.keys():
-        if num == pred:
-            cv2.rectangle(output_frame, (0,60+num*40), (130, 90+num*40), colors[num], -1)
+    for num, prob in enumerate(pred):
+        cv2.rectangle(output_frame, (0,60+num*40), (int(prob*100), 90+num*40), colors[num], -1)
         # print((0,60+num*40), (int(prob*100), 90+num*40))
         cv2.putText(output_frame, actions[num], (0, 85+num*40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,0), 2, cv2.LINE_AA)
         
@@ -76,16 +73,12 @@ def get_parser():
     parser = argparse.ArgumentParser(description='aaaa')
 
     ## Training
-    # parser.add_argument('-e', '--eval',  help='evaluation mode')
+    parser.add_argument('-e', '--eval', action='store_true')
+    parser.add_argument('-a', '--all', action='store_true')
     parser.add_argument('-ep', '--epoch', type=int, default=200)
-    parser.add_argument('-lr', '--learning_rate', type=float, default=1e-4)
+    parser.add_argument('-p', '--part', type=int, help='index for body part')
     parser.add_argument('--train_batch_size', default=32, type=int, help='index for body part')
     parser.add_argument('--test_batch_size', default=64, type=int, help='index for body part')
-
-    ## Eval
-    parser.add_argument('--no_eval', default=False, type=bool, help='Only training w/o eval')
-    parser.add_argument('--test', action='store_true',default=False, help='testing mode')
-
 
     ## Model
     parser.add_argument('--model', default=None)
@@ -94,14 +87,12 @@ def get_parser():
 
 
     ## data
-    parser.add_argument('--translate', type=bool, default=False)
-    parser.add_argument('--scale', type=bool, default=False)
-    parser.add_argument('--onlyxy', type=bool, default=False)
-    parser.add_argument('--vector', type=bool, default=False)
+    parser.add_argument('--translate', type=bool, default=True)
+    parser.add_argument('--scale', type=bool, default=True)
     parser.add_argument('--type', type=str, default='body')
 
     ## Base
-    parser.add_argument('--config', type=str, default='./config/trip2_hand_data1.yaml')
+    parser.add_argument('--config', type=str, default='./config/hand/mlp2_hand.yaml')
     parser.add_argument('--phase', default='train', help='must be train or test')
     parser.add_argument('--actions', default=4, type=int , help='must be train or test')
     return parser
@@ -118,45 +109,17 @@ class Processor:
         print(Model)
         self.model = Model(**self.args.model_args)
 
-    def transform(self, data):
-        body, _, rh = split_keypoints(data)
-        body = body.reshape(-1,4)
-        rh  = rh.reshape(-1, 3)
-
-        if self.args.onlyxy:
-            body,rh =  body[:,:2], rh[:, :2]
-        if self.args.translate:
-            body, rh = translate(body), translate(rh)
-        if self.args.scale:
-            rh  = scaling(rh)
-        if self.args.vector:
-            body,rh = vectorform(body),vectorform(rh)
-
-        
-        data = rh.ravel()
-        return torch.from_numpy(data).float()
 
     def run(self):
         cap = cv2.VideoCapture()
         cap.open(0)
-
-        self.weight_path = os.path.join('./weights',self.args.config.split('/')[2])
-        checkpoint = torch.load(f'{self.weight_path}/model_weights.pt')
-        # centroids = torch.load(f'{self.weight_path}/centroids.pt')
+        checkpoint = torch.load('./weights/mlp2_lr0.0001_ep200/model_weights.pt')
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        kmeans = pickle.load(open(f'{self.weight_path}/kmeans.pkl', 'rb'))
-        
-        labels = {}
-        with open(f'{self.weight_path}/labels.txt', 'r') as f:
-            for pair in f.readlines():
-                name, idx = pair.strip().split(' ')
-                labels[int(idx)] = name
-        print(labels)
-
         with torch.no_grad():
             self.model.eval()
-        # softmax = Softmax()
-        
+        softmax = Softmax()
+        actions = actions_dict[self.args.actions]
+
         with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
             while 1:
                 ret, frame = cap.read()
@@ -164,39 +127,58 @@ class Processor:
                     break
                 image, results = mediapipe_detection(frame, holistic)
                 _kps = extract_keypoints(results)
-                # print(_kps)
-                x = self.transform(_kps)
-                
+                body, _, rh = split_keypoints(_kps)
                 #####################################
+
+                kp5 = rh.reshape(-1,3)[5]
+                # x = kp5[0]
+                # y = kp5[1]
+                x = kp5[0]*frame.shape[1]
+                y = kp5[1]*frame.shape[0]
+                z= kp5[2]
+
+                kp0= rh.reshape(-1,3)[0][:2]
+                kp5 =rh.reshape(-1,3)[5][:2]
+                kp0[0] *=frame.shape[1]
+                kp0[1] *=frame.shape[0]
+                kp5[0] *=frame.shape[1]
+                kp5[1] *=frame.shape[0]
+                dist = np.linalg.norm(kp0-kp5)
+                
+
+                cv2.putText(image, f'{int(x)},{int(y)},{z:.2f}', (300, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2, cv2.LINE_AA)
+                cv2.putText(image, f'{dist:.4f}', (300, 350), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2, cv2.LINE_AA)
                 # cv2.putText(image, f'{rh[5]}', (300, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,0), 2, cv2.LINE_AA)
+
 
                 ####################################
 
-                x = torch.unsqueeze(x, 0)
+                if self.args.translate:
+                    body, rh = translate(body), translate(rh)
+                if self.args.scale:
+                    body, rh  = scaling(body,rh)
+                
+                if self.args.type =='body':
+                    data = np.concatenate([body, rh ])
+                else:
+                    data = rh
+                data =np.expand_dims(data,axis=0)
+                x = torch.from_numpy(data).float()
                 output = self.model(x)[0]
                 # print([f'{int(v*100)}' for v in output.cpu().detach().numpy()])
-                output = torch.nan_to_num(output, nan=99)
-                output = output.detach().numpy()
-                # print(pread)
-                dist = kmeans.transform(output.reshape(-1,2))[0]
-
-                min_idx = np.argmin(dist)
-                if dist[min_idx] < 0.5:
-                    # print(dist[min_idx], labels[min_idx])
-                    image = prob_viz(image, labels, min_idx)
-                else:
-                    image = prob_viz(image, labels, -1)
+                pred = softmax(output).cpu().detach().numpy()
+                pred = [ 0 if math.isnan(t) else t for t in pred]
                 
                 # print([f'{v:.2f}' for v in tmp], sum(tmp))    
                 # print([v for v in tmp])    
                 # pred = pred.cpu().detach().numpy()
                 # print(pred.cpu().detach().numpy())
                 draw_landmarks(image, results)
-                                
+                image = prob_viz(image, actions, pred)                
                 
                 if cv2.waitKey(1) ==ord('q'):
                     quit()
-                cv2.imshow('OpenCV Feed', cv2.resize(image,(1920,1080)))
+                cv2.imshow('OpenCV Feed', image)
                 
             cap.release()
             cv2.destroyAllWindows()

@@ -20,6 +20,9 @@ import pandas as pd
 from torch.utils.tensorboard import SummaryWriter
 from sklearn.preprocessing import LabelEncoder
 from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
+import pdb
+import pickle
 
 N_CLASSES = 'n_classes'
 TEST_ACTIONS = 'test_actions'
@@ -89,7 +92,6 @@ class TensorData(Dataset):
         self.x_data = X
         self.len = self.x_data.shape[0]
         
-
         
 
     def transform(self, data):
@@ -218,8 +220,15 @@ class AverageMeter(object):
 class Processor:
     def __init__(self, args):
         self.args = args
+        config_name = args.config.split('/')[-1].split('.')[0]
         model_name = args.model.split('.')[1]
+        # _work_dir = f'{args.work_dir}/{config_name}'
+        # last_ver = os.listdir(_work_dir).sorted()[-1]
+        # last_ver = last_ver[-1].split('_')[0][1:]
+        # last_ver = int(last_ver)+1
+        # self.work_dir = 
         model_name =f'{model_name}_lr{args.learning_rate}_ep{args.epoch}'
+        
 
         self.init_dirs(model_name)
         self.load_model()
@@ -228,14 +237,18 @@ class Processor:
         self.valid_writer = SummaryWriter(f'./logs/{model_name}/valid', 'valid')
         self.avg = AverageMeter()
         self.load_data()
+
+        
         if args.test:
             self.test2()
+            # self.save_cluster()
         else:
             self.train()
 
 
     def init_dirs(self,model_name):
-        self.weight_path = os.path.join('./weights',model_name)
+        # self.weight_path = os.path.join('./weights',model_name)
+        self.weight_path = os.path.join('./weights',self.args.config.split('/')[2])
         if not os.path.exists(self.weight_path):
             os.makedirs(self.weight_path)
         
@@ -257,8 +270,8 @@ class Processor:
         trainx,trainy = _read_data3(['data_p01_s001.npy','data_p01_s002.npy','data_p01_s003.npy'])
         
         valx, valy    = _read_data3(['data_p02_s001.npy','data_p02_s002.npy','data_p02_s003.npy'])
-        self.trainsets = TensorData(self.args,  trainx, trainy, train=True)
-        self.trainloader = DataLoader(self.trainsets, batch_size=self.args.train_batch_size, shuffle=True)
+        self.trainset = TensorData(self.args,  trainx, trainy, train=True)
+        self.trainloader = DataLoader(self.trainset, batch_size=self.args.train_batch_size, shuffle=True)
         
         self.validset = TensorData(self.args, valx, valy)
         self.validloader = DataLoader(self.validset, batch_size=self.args.test_batch_size, shuffle=False)        
@@ -272,28 +285,74 @@ class Processor:
         # tmpset =TensorData(self.args, None,None)
         # trainx,trainy = _read_data3(['data_p01_s001.npy','data_p01_s002.npy','data_p01_s003.npy'])
 
-        checkpoint = torch.load('./weights/trip1_lr0.0001_ep400/model_weights.pt')
+        checkpoint = torch.load(f'{self.weight_path}/model_weights.pt')
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        train_results,labels  = [], []
+        
         with torch.no_grad():
             self.model.eval() # 평가를 할 땐 반드시 eval()을 사용해야 한다.
 
+
+
+        train_x,train_y  = [], []
+        for img,_,_ ,label in self.trainloader:
+            res = self.model(img).detach().numpy()
+            train_x.append(res)
+            train_y.append(label.detach().numpy())
+
+        val_x, val_y = [] , []
         for img, label in self.validloader:
             res = self.model(img).detach().numpy()
-            train_results.append(res)
-            labels.append(label.detach().numpy())
+            val_x.append(res)
+            val_y.append(label.detach().numpy())
 
-        train_results = np.concatenate(train_results)
-        labels = np.concatenate(labels)
-        tsne = TSNE(n_components=2, learning_rate='auto',init='random')
-        transformed = tsne.fit_transform(train_results)
-        plt.figure(figsize=(15, 10), facecolor="azure")
-        for label in np.unique(labels):
-            print(label, type(label))
+
+        train_x = np.concatenate(train_x)
+        train_y = np.concatenate(train_y)
+
+        val_x = np.concatenate(val_x)
+        val_y = np.concatenate(val_y)
+        fig, ax = plt.subplots(figsize=(15, 10), facecolor="azure") 
+        # tsne = TSNE(n_components=2, learning_rate='auto',init='random')
+        # transformed = tsne.fit_transform(train_results)
+        # plt.figure(figsize=(15, 10), facecolor="azure")
+        for label in np.unique(train_y):
+            l = self.trainset.le.inverse_transform([label])
+            str_label = idx2label[l[0]]
+            tmp = train_x[train_y==label]
+            ax.scatter(tmp[:, 0], tmp[:, 1], marker='o', label=str_label)
+
+        
+        for label in np.unique(val_y):
             l = self.validset.le.inverse_transform([label])
             str_label = idx2label[l[0]]
-            tmp = transformed[labels==label]
-            plt.scatter(tmp[:, 0], tmp[:, 1], label=str_label)
+            tmp = val_x[val_y==label]
+            ax.scatter(tmp[:, 0], tmp[:, 1], marker='*', label=str_label)
+
+
+        kmeans = KMeans(n_clusters=7, random_state=0).fit(train_x)
+        centroids = kmeans.cluster_centers_
+
+        for label in np.unique(train_y):
+            l = self.trainset.le.inverse_transform([label])
+            str_label = idx2label[l[0]]
+            tmp = train_x[train_y == label][0]
+            pred_y = kmeans.predict(tmp.reshape(-1,2))
+            print(str_label, pred_y[0])
+        pickle.dump(kmeans, open(f'{self.weight_path}/kmeans.pkl', 'wb'))
+
+
+        ax.scatter(centroids[:,0] , centroids[:,1] , s = 80, color = 'k')
+        # plt.scatter(centroids[:,0] , centroids[:,1] , s= 1000 ,  facecolors='none', edgecolors='blue' ) 
+
+        for cc in centroids:
+            circle1 = plt.Circle((cc[0], cc[1]), 0.9, color='r',fill=False)
+            ax.add_patch(circle1)
+        # circle2 = plt.Circle((0.5, 0.5), 0.2, color='blue',fill=False)
+        # circle3 = plt.Circle((1, 1), 0.2, color='g', fill=False)
+        
+        # np.save(f'{self.weight_path}/centroids.npy', centroids)
+        # ax.add_patch(circle2)
+        # ax.add_patch(circle3)
 
         plt.legend()
         plt.show()
@@ -343,6 +402,24 @@ class Processor:
         self.loss = nn.TripletMarginLoss(margin=1.0, p=2)
         self.softmax = nn.Softmax(dim=1)
 
+    def save_cluster(self):
+        with torch.no_grad():
+            self.model.eval() # 평가를 할 땐 반드시 eval()을 사용해야 한다.
+        
+        train_x,train_y  = [], []
+        for img,_,_ ,label in self.trainloader:
+            res = self.model(img).detach().numpy()
+            train_x.append(res)
+            train_y.append(label.detach().numpy())
+
+        train_x = np.concatenate(train_x)
+        train_y = np.concatenate(train_y)
+
+        kmeans = KMeans(n_clusters=self.args.model_args['num_class'], random_state=0).fit(train_x)
+        centroids = kmeans.cluster_centers_
+        np.save(f'{self.weight_path}/centroids.npy', centroids)
+
+
     def train(self):
         self.optimizer = optim.Adam(self.model.parameters(), 
                         lr=self.args.learning_rate, weight_decay=1e-8)
@@ -386,6 +463,7 @@ class Processor:
                     name_desc.set_description(msg)
                     
             self.save_weight(epoch, False)
+            self.save_cluster()
             # if best_epoch_acc < self.avg.avg:
                 # best_epoch_acc = self.avg.avg
                 # self.save_weight(epoch, True)
@@ -428,6 +506,8 @@ if __name__=='__main__':
 
     arg = parser.parse_args()
     set_seed(1)
+    # pdb.set_trace()
+    # quit()
     process = Processor(arg)
     
 

@@ -56,7 +56,10 @@ def scaling(_data, hand = True):
     p1 = _data[0]
     p2 = _data[5]
     s = np.linalg.norm(p1-p2)
-    return _data/s
+    if s:
+        return _data/s
+    else:
+        return _data
     
 
 def load_dataset(ver, actions):
