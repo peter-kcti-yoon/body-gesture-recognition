@@ -100,8 +100,9 @@ def get_parser():
     parser.add_argument('--vector', type=bool, default=False)
     parser.add_argument('--type', type=str, default='body')
 
-    ## Base
+    ## Basework_dir: './work_dir/trip2'
     parser.add_argument('--config', type=str, default='./config/trip2_hand_data1.yaml')
+    parser.add_argument('--work_dir', type=str, default='./work_dir/trip2')
     parser.add_argument('--phase', default='train', help='must be train or test')
     parser.add_argument('--actions', default=4, type=int , help='must be train or test')
     return parser
@@ -139,13 +140,18 @@ class Processor:
     def run(self):
         cap = cv2.VideoCapture()
         cap.open(0)
-
+        w = round(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = round(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+        video_name = f'results.avi'
+        video_path = os.path.join('.', video_name)        
         self.weight_path = os.path.join('./weights',self.args.config.split('/')[2])
         checkpoint = torch.load(f'{self.weight_path}/model_weights.pt')
         # centroids = torch.load(f'{self.weight_path}/centroids.pt')
         self.model.load_state_dict(checkpoint['model_state_dict'])
         kmeans = pickle.load(open(f'{self.weight_path}/kmeans.pkl', 'rb'))
-        
+        writer = cv2.VideoWriter(video_path, fourcc, 15, (w, h))
+
         labels = {}
         with open(f'{self.weight_path}/labels.txt', 'r') as f:
             for pair in f.readlines():
@@ -197,7 +203,7 @@ class Processor:
                 if cv2.waitKey(1) ==ord('q'):
                     quit()
                 cv2.imshow('OpenCV Feed', cv2.resize(image,(1920,1080)))
-                
+                writer.write(image)
             cap.release()
             cv2.destroyAllWindows()
     
@@ -217,7 +223,7 @@ if __name__=='__main__':
         for k in default_arg.keys():
             if k not in key:
                 print('WRONG ARG: {}'.format(k))
-                assert (k in key)
+                assert (k in key) , k
         parser.set_defaults(**default_arg)
 
     arg = parser.parse_args()
